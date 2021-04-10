@@ -58,27 +58,27 @@ public class UserController {
         String publickey = (String) map.get("key");
         Boolean longtime = (Boolean) map.get("longtime");
         String privatekey = RedisUtil.GetPrivateKey(publickey);
-        if(privatekey != null){
+        Assert.notNull(privatekey,"公钥已过期");
             password = RSAUtil.decrypt(password,privatekey);
             username = RSAUtil.decrypt(username,privatekey);
-            if(elasticsearchTemplate.exists(username, User.class)){
-                User user = elasticsearchTemplate.getById(username,User.class);
-                if(user.getPassword().equals(MD5Util.getMD5(password))){
-                    Cookie logeed = new Cookie("logeed",RedisUtil.GenerateToken(user.getUsername(),longtime));
-                    Cookie xsrf = new Cookie("XSRF-TOKEN",MD5Util.getMD5(String.valueOf(new Date())));
-                    if(longtime){
-                        logeed.setMaxAge(60*60*24*14);
-                        xsrf.setMaxAge(60*60*24*14);
-                    }
-                    logeed.setPath("/");
-                    xsrf.setPath("/");
-                    logeed.setHttpOnly(true);
-                    response.addCookie(logeed);
-                    response.addCookie(xsrf);
-                    return true;
+        if(elasticsearchTemplate.exists(username, User.class)){
+            User user = elasticsearchTemplate.getById(username,User.class);
+            if(user.getPassword().equals(MD5Util.getMD5(password))){
+                Cookie logeed = new Cookie("logeed",RedisUtil.GenerateToken(user.getUsername(),longtime));
+                Cookie xsrf = new Cookie("XSRF-TOKEN",MD5Util.getMD5(String.valueOf(new Date())));
+                if(longtime){
+                    logeed.setMaxAge(60*60*24*14);
+                    xsrf.setMaxAge(60*60*24*14);
                 }
+                logeed.setPath("/");
+                xsrf.setPath("/");
+                logeed.setHttpOnly(true);
+                response.addCookie(logeed);
+                response.addCookie(xsrf);
+                return true;
             }
         }
+        response.setStatus(401);
         return false;
     }
 
@@ -88,29 +88,23 @@ public class UserController {
     }
 
     @GetMapping("/userinfo")
-    public User userinfo(@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF,@CookieValue("logeed") String logeed) throws Exception{
-        if(!TOKEN.equals(XSRF)){
-            throw new XSRFException(401,"请求头与XSRF-TOKEN不一致");
-        }
+    public User userinfo(@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF,@CookieValue("logeed") String logeed,HttpServletResponse response) throws Exception{
+        Assert.isTrue(TOKEN.equals(XSRF),"请求头与XSRF-TOKEN不一致");
         String username = RedisUtil.GetToken(logeed);
-        System.out.println("info:"+username);
-        User user = new User();
-        if(username != null){
-            user = elasticsearchTemplate.getById(username,User.class);
-            if(user != null){
-                user.setPassword("");
-            }else{
-                RedisUtil.DelToken(logeed);
-            }
+        Assert.notNull(username,"Token已过期");
+        User user = elasticsearchTemplate.getById(username,User.class);
+        if(user != null){
+            user.setPassword("");
+        }else{
+            RedisUtil.DelToken(logeed);
+            response.setStatus(401);
         }
         return user;
     }
 
     @DeleteMapping("/logout")
     public boolean logout(@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF,@CookieValue("logeed") String logeed,HttpServletRequest request, HttpServletResponse response) throws Exception{
-        if(!TOKEN.equals(XSRF)){
-            throw new XSRFException(401,"请求头与XSRF-TOKEN不一致");
-        }
+        Assert.isTrue(TOKEN.equals(XSRF),"请求头与XSRF-TOKEN不一致");
         Cookie cookie = new Cookie("logeed",null);
         cookie.setMaxAge(0);
         cookie.setHttpOnly(false);
@@ -121,9 +115,7 @@ public class UserController {
 
     @PostMapping("/setsubscribe")
     public boolean subscribe(@RequestBody List<String> subscribe,@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF,@CookieValue("logeed") String logeed) throws Exception{
-        if(!TOKEN.equals(XSRF)){
-            throw new XSRFException(401,"请求头与XSRF-TOKEN不一致");
-        }
+        Assert.isTrue(TOKEN.equals(XSRF),"请求头与XSRF-TOKEN不一致");
         String username = RedisUtil.GetToken(logeed);
         User user = elasticsearchTemplate.getById(username,User.class);
         user.setSubscribe(subscribe);
@@ -132,9 +124,7 @@ public class UserController {
 
     @PatchMapping("/setpetname")
     public boolean changepetname(@RequestBody Map<String,String> map,@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF,@CookieValue("logeed") String logeed) throws Exception{
-        if(!TOKEN.equals(XSRF)){
-            throw new XSRFException(401,"请求头与XSRF-TOKEN不一致");
-        }
+        Assert.isTrue(TOKEN.equals(XSRF),"请求头与XSRF-TOKEN不一致");
         String petname = map.get("petname");
         String username = RedisUtil.GetToken(logeed);
         User user = new User();
@@ -143,36 +133,24 @@ public class UserController {
         return elasticsearchTemplate.update(user);
     }
 
-    @GetMapping("/verify")
-    public boolean verify(@RequestBody Map<String,String> map,@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF,@CookieValue("logeed") String logeed) throws Exception{
-        if(!TOKEN.equals(XSRF)){
-            throw new XSRFException(401,"请求头与XSRF-TOKEN不一致");
-        }
-        String password = map.get("password");
-        String username = RedisUtil.GetToken(logeed);
-        User user = elasticsearchTemplate.getById(username, User.class);
-        return user.getPassword().equals(MD5Util.getMD5(password));
-    }
-
     @PatchMapping("/setpassword")
-    public boolean setpassword(@RequestBody Map<String,String> map,@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF,@CookieValue("logeed") String logeed) throws Exception{
-        if(!TOKEN.equals(XSRF)){
-            throw new XSRFException(401,"请求头与XSRF-TOKEN不一致");
-        }
+    public boolean setpassword(@RequestBody Map<String,String> map,@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF,@CookieValue("logeed") String logeed,HttpServletResponse response) throws Exception{
+        Assert.isTrue(TOKEN.equals(XSRF),"请求头与XSRF-TOKEN不一致");
         String password = map.get("password");
         String newpassword = map.get("newpassword");
         String publickey = map.get("key");
         String username = RedisUtil.GetToken(logeed);
+        Assert.notNull(username,"Token已过期");
         String privatekey = RedisUtil.GetPrivateKey(publickey);
-        if(username != null && privatekey != null){
-            User user = elasticsearchTemplate.getById(username, User.class);
-            password = RSAUtil.decrypt(password,privatekey);
-            newpassword = RSAUtil.decrypt(newpassword,privatekey);
-            if(user.getPassword().equals(MD5Util.getMD5(password))){
-                user.setPassword(MD5Util.getMD5(newpassword));
-                return elasticsearchTemplate.update(user);
-            }
+        Assert.notNull(privatekey,"公钥已过期");
+        User user = elasticsearchTemplate.getById(username, User.class);
+        password = RSAUtil.decrypt(password,privatekey);
+        newpassword = RSAUtil.decrypt(newpassword,privatekey);
+        if(user.getPassword().equals(MD5Util.getMD5(password))){
+            user.setPassword(MD5Util.getMD5(newpassword));
+            return elasticsearchTemplate.update(user);
         }
+        response.setStatus(403);
         return false;
     }
 
