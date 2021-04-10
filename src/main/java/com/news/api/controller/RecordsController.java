@@ -7,6 +7,7 @@ import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.Assert;
 import org.springframework.web.bind.annotation.*;
 import org.zxp.esclientrhl.enums.AggsType;
 import org.zxp.esclientrhl.repository.ElasticsearchTemplate;
@@ -27,7 +28,9 @@ public class RecordsController {
 
     @PostMapping("/pushrecord")
     public boolean pushrecord(@RequestBody Records record,@CookieValue(value = "logeed",required = false) String logeed) throws Exception {
-        record.setUsername(RedisUtil.GetToken(logeed));
+        if(!logeed.isEmpty()){
+            record.setUsername(RedisUtil.GetToken(logeed));
+        }
         record.setDate(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").format(new Date()));
         return elasticsearchTemplate.save(record);
     }
@@ -55,42 +58,47 @@ public class RecordsController {
     }
 
     @GetMapping("/history")
-    public List<Records> history(@RequestParam Integer page,@RequestParam Integer size,@RequestParam String from,@RequestParam String to,@CookieValue("logeed") String logeed) throws Exception {
+    public List<Records> history(@RequestParam Integer page,@RequestParam Integer size,@RequestParam String from,@RequestParam String to,@CookieValue("logeed") String logeed,@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF) throws Exception {
+        Assert.isTrue(TOKEN.equals(XSRF),"请求头与XSRF-TOKEN不一致");
         String username = RedisUtil.GetToken(logeed);
-        if(username != null){
-            BoolQueryBuilder bool_queryBuilder = new BoolQueryBuilder();
-            if(!from.isEmpty() && !to.isEmpty()){
-                bool_queryBuilder.must(QueryBuilders.rangeQuery("date").from(from).to(to));
-            }
-            PageSortHighLight psh = new PageSortHighLight(page, size);
-            String sorter = "date";
-            Sort.Order order = new Sort.Order(SortOrder.DESC,sorter);
-            psh.setSort(new Sort(order));
-            bool_queryBuilder.must(QueryBuilders.termQuery("username",username));
-            return elasticsearchTemplate.search(bool_queryBuilder,psh,Records.class).getList();
+        Assert.notNull(username,"Token已过期");
+        BoolQueryBuilder bool_queryBuilder = new BoolQueryBuilder();
+        if(!from.isEmpty() && !to.isEmpty()){
+            bool_queryBuilder.must(QueryBuilders.rangeQuery("date").from(from).to(to));
         }
-        return new ArrayList<>();
+        PageSortHighLight psh = new PageSortHighLight(page, size);
+        String sorter = "date";
+        Sort.Order order = new Sort.Order(SortOrder.DESC,sorter);
+        psh.setSort(new Sort(order));
+        bool_queryBuilder.must(QueryBuilders.termQuery("username",username));
+        return elasticsearchTemplate.search(bool_queryBuilder,psh,Records.class).getList();
     }
+
     @GetMapping("/historycount")
-    public long historycount(@RequestParam String from,@RequestParam String to,@CookieValue("logeed") String logeed) throws Exception {
+    public long historycount(@RequestParam String from,@RequestParam String to,@CookieValue("logeed") String logeed,@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF) throws Exception {
+        Assert.isTrue(TOKEN.equals(XSRF),"请求头与XSRF-TOKEN不一致");
         String username = RedisUtil.GetToken(logeed);
-        if(username != null){
-            BoolQueryBuilder bool_queryBuilder = new BoolQueryBuilder();
-            if(!from.isEmpty() && !to.isEmpty()){
-                System.out.println(from);
-                System.out.println(to);
-                bool_queryBuilder.must(QueryBuilders.rangeQuery("date").from(from).to(to));
-            }
-            return elasticsearchTemplate.count(bool_queryBuilder,Records.class);
+        Assert.notNull(username,"Token已过期");
+        BoolQueryBuilder bool_queryBuilder = new BoolQueryBuilder();
+        if(!from.isEmpty() && !to.isEmpty()){
+            System.out.println(from);
+            System.out.println(to);
+            bool_queryBuilder.must(QueryBuilders.rangeQuery("date").from(from).to(to));
         }
-        return 0;
+        return elasticsearchTemplate.count(bool_queryBuilder,Records.class);
     }
+
     @DeleteMapping("/delrecord")
-    public boolean delrecord(@RequestBody List<String> idlist) throws Exception {
-        System.out.println(idlist);
-        idlist.forEach(
-                (id) -> {
+    public boolean delrecord(@RequestBody List<String> idlist,@CookieValue("logeed") String logeed,@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF) throws Exception {
+        Assert.isTrue(TOKEN.equals(XSRF),"请求头与XSRF-TOKEN不一致");
+        String username = RedisUtil.GetToken(logeed);
+        Assert.notNull(username,"Token已过期");
+        List<Records> relist = elasticsearchTemplate.mgetById(new String[idlist.size()],Records.class);
+        relist.forEach(
+                (item) -> {
                     try {
+                        Assert.isTrue(username.equals(item.getUsername()),"恶意请求");//forEach实质是一个Lambda，不能对外部变量赋值
+                        String id = item.getId();
                         elasticsearchTemplate.deleteById(id,Records.class);
                     } catch (Exception e) {
                         e.printStackTrace();

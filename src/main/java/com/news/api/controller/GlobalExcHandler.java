@@ -16,12 +16,14 @@ public class GlobalExcHandler {
     @ExceptionHandler(value = IllegalArgumentException.class)
     public String handleArgError(IllegalArgumentException e,HttpServletResponse response){
         switch (e.getMessage()){
-            case "公钥已过期":
-                response.setStatus(408);//超时
-            case "请求头与XSRF-TOKEN不一致":
-                response.setStatus(403);//拒绝执行
             case "Token已过期":
                 response.setStatus(401);//要求身份认证
+            case "请求头与XSRF-TOKEN不一致":
+                response.setStatus(403);//拒绝执行
+            case "恶意请求":
+                response.setStatus(403);//拒绝执行
+            case "公钥已过期":
+                response.setStatus(408);//超时
         }
         return e.getMessage();
     }
