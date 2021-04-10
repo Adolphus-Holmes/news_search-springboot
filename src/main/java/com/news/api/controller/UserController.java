@@ -9,6 +9,7 @@ import com.news.api.util.XSRFException;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.Assert;
 import org.springframework.web.bind.annotation.*;
 import org.zxp.esclientrhl.repository.ElasticsearchTemplate;
 
@@ -32,11 +33,20 @@ public class UserController {
     }
 
     @PostMapping("/register")
-    public boolean register(@RequestBody User user) throws Exception {
-        if(namesake(user.getUsername())){
+    public boolean register(@RequestBody Map<String,Object> map) throws Exception {
+        String username = (String) map.get("username");
+        String password = (String) map.get("password");
+        String publickey = (String) map.get("key");
+        String privatekey = RedisUtil.GetPrivateKey(publickey);
+        Assert.notNull(privatekey,"公钥已过期");
+        password = RSAUtil.decrypt(password,privatekey);
+        username = RSAUtil.decrypt(username,privatekey);
+        if(namesake(username)){
             return false;
         }else{
-            user.setPassword(MD5Util.getMD5(user.getPassword()));//生产环境中的数据通过https传输时已有加密
+            User user = new User();
+            user.setUsername(username);
+            user.setPassword(MD5Util.getMD5(password));
             return elasticsearchTemplate.save(user);
         }
     }
