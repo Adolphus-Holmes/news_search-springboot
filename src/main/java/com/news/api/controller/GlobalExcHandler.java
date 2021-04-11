@@ -18,12 +18,16 @@ public class GlobalExcHandler {
         switch (e.getMessage()){
             case "Token已过期":
                 response.setStatus(401);//要求身份认证
+                break;
             case "请求头与XSRF-TOKEN不一致":
-                response.setStatus(403);//拒绝执行
+                response.setStatus(425);//重放攻击
+                break;
             case "恶意请求":
                 response.setStatus(403);//拒绝执行
+                break;
             case "公钥已过期":
-                response.setStatus(408);//超时
+                response.setStatus(449);//重试
+                break;
         }
         return e.getMessage();
     }

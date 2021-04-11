@@ -150,7 +150,7 @@ public class UserController {
             user.setPassword(MD5Util.getMD5(newpassword));
             return elasticsearchTemplate.update(user);
         }
-        response.setStatus(403);
+        response.setStatus(401);
         return false;
     }
 
