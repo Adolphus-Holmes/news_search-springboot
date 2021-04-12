@@ -113,13 +113,15 @@ public class UserController {
         return RedisUtil.DelToken(logeed);
     }
 
-    @PostMapping("/setsubscribe")
+    @PatchMapping("/setsubscribe")
     public boolean subscribe(@RequestBody List<String> subscribe,@RequestHeader("X-XSRF-TOKEN") String TOKEN,@CookieValue("XSRF-TOKEN") String XSRF,@CookieValue("logeed") String logeed) throws Exception{
         Assert.isTrue(TOKEN.equals(XSRF),"请求头与XSRF-TOKEN不一致");
         String username = RedisUtil.GetToken(logeed);
-        User user = elasticsearchTemplate.getById(username,User.class);
+        Assert.notNull(username,"Token已过期");
+        User user = new User();
+        user.setUsername(username);
         user.setSubscribe(subscribe);
-        return elasticsearchTemplate.save(user);
+        return elasticsearchTemplate.update(user);
     }
 
     @PatchMapping("/setpetname")
@@ -127,6 +129,7 @@ public class UserController {
         Assert.isTrue(TOKEN.equals(XSRF),"请求头与XSRF-TOKEN不一致");
         String petname = map.get("petname");
         String username = RedisUtil.GetToken(logeed);
+        Assert.notNull(username,"Token已过期");
         User user = new User();
         user.setUsername(username);
         user.setPetname(petname);

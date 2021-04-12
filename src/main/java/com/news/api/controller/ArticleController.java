@@ -7,7 +7,6 @@ import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.zxp.esclientrhl.repository.*;
-import java.io.IOException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -64,12 +63,12 @@ public class ArticleController {
     }
 
     @PostMapping("/subscribe")
-    public List<Article> subscribe(@RequestBody List<String> subscribe,@RequestParam int page) throws Exception {
+    public List<Article> subscribe(@RequestBody List<String> subscribe, @RequestParam int page,@RequestParam int size) throws Exception {
         BoolQueryBuilder bool = QueryBuilders.boolQuery();
         for (String s:subscribe){
             bool.should(GenerateQuery(s));
         }
-        PageSortHighLight psh = new PageSortHighLight(page, 20);
+        PageSortHighLight psh = new PageSortHighLight(page, size);
         String sorter = "release_date";
         Sort.Order order = new Sort.Order(SortOrder.DESC,sorter);
         psh.setSort(new Sort(order));
@@ -98,7 +97,7 @@ public class ArticleController {
             for(Map map:word){
                 String w = (String) map.get("word");
                 float f = Float.parseFloat(map.get("factor").toString());
-                wd.should(QueryBuilders.termQuery("text",w)).boost(f);
+                wd.should(QueryBuilders.multiMatchQuery(w,"title","text").type(MultiMatchQueryBuilder.Type.CROSS_FIELDS)).boost(f);
                 System.out.println("word:"+w+"    "+"factor:"+f+"\n");
             }
             doc.should(wd);
