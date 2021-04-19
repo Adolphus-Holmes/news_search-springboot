@@ -2,11 +2,21 @@ package com.news.api.controller;
 
 import com.google.gson.Gson;
 import com.news.api.entity.Article;
+import com.news.api.entity.Records;
+import org.elasticsearch.common.unit.Fuzziness;
 import org.elasticsearch.index.query.*;
+import org.elasticsearch.search.aggregations.AggregationBuilders;
+import org.elasticsearch.search.aggregations.Aggregations;
+import org.elasticsearch.search.aggregations.bucket.terms.ParsedSignificantStringTerms;
+import org.elasticsearch.search.aggregations.bucket.terms.SignificantTextAggregationBuilder;
+import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.sort.SortOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.zxp.esclientrhl.enums.AggsType;
 import org.zxp.esclientrhl.repository.*;
+
+import javax.servlet.http.HttpServletResponse;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -47,6 +57,32 @@ public class ArticleController {
         return elasticsearchTemplate.getById(id,Article.class);
     }
 
+    @GetMapping("/statistics")
+    public List<Map<String,Object>> statistics(@RequestParam String keyword) throws Exception{
+        QueryBuilder queryBuilder = null;
+        if(!keyword.isEmpty()){
+            queryBuilder = GenerateQuery(keyword);
+        }
+        Map map = elasticsearchTemplate.aggs("source.keyword", AggsType.count,queryBuilder, Article.class,"source.keyword");
+        int i = 0;
+        List<Map<String,Object>> list = new ArrayList<>();
+        for(Object k : map.keySet()){
+            Map<String,Object> one = new HashMap();
+            one.put("name",k.toString());
+            one.put("value",map.get(k));
+            list.add(one);
+            if(i >= 9){
+                Map<String,Object> other = new HashMap();
+                other.put("value",-1);
+                list.add(other);
+                break;
+            }else{
+                i++;
+            }
+        }
+        return list;
+    }
+
     @GetMapping("/count")
     public Map<String, Double> count(@RequestParam String keyword,@RequestParam String start,@RequestParam String end) throws Exception{
         Map<String,Double> map = new HashMap();
@@ -63,7 +99,7 @@ public class ArticleController {
     }
 
     @PostMapping("/subscribe")
-    public List<Article> subscribe(@RequestBody List<String> subscribe, @RequestParam int page,@RequestParam int size) throws Exception {
+    public List<Article> subscribe(@RequestBody List<String> subscribe, @RequestParam int page, @RequestParam int size, HttpServletResponse response) throws Exception {
         BoolQueryBuilder bool = QueryBuilders.boolQuery();
         for (String s:subscribe){
             bool.should(GenerateQuery(s));
@@ -76,16 +112,30 @@ public class ArticleController {
         String[] includes = {"id","title","release_date"};
         attach.setIncludes(includes);
         attach.setPageSortHighLight(psh);
+        //response.setStatus(401);
         return elasticsearchTemplate.search(bool,attach,Article.class).getList();
     }
     @PostMapping("searchid")
-    public Map searchid(@RequestBody Map data) throws Exception{
+    public Map<String, Object> searchid(@RequestBody Map<String,Object> data) throws Exception{
+        long startTime = System.currentTimeMillis();
         Gson gson = new Gson();
-        Map<String, Object> map = new HashMap<>();
+        Map<String,Object> map = new HashMap();
         String str = gson.toJson(data);
-        Map map2 = gson.fromJson(str, map.getClass());
-        System.out.println(str.hashCode());
-        System.out.println(map2);
+        map.put("hashcode", str.hashCode());
+        BoolQueryBuilder queryBuilder = MapToQuery(data);
+        long count = elasticsearchTemplate.count(queryBuilder, Article.class);
+        map.put("count", count);
+        SignificantTextAggregationBuilder signtext = AggregationBuilders.significantText("significant_terms","text.sign");
+        Aggregations aggregations = elasticsearchTemplate.aggs(signtext,queryBuilder, Article.class);
+        ParsedSignificantStringTerms terms = aggregations.get("significant_terms");
+        List<String> tremlist = new ArrayList<>();
+        Iterator var20 = terms.getBuckets().iterator();
+        while(var20.hasNext() && tremlist.size() < 9){
+            ParsedSignificantStringTerms.ParsedBucket bucket = (ParsedSignificantStringTerms.ParsedBucket)var20.next();
+            tremlist.add(bucket.getKeyAsString());
+        }
+        map.put("term",tremlist);
+        map.put("time", ((System.currentTimeMillis() - startTime) / 1000d));
         return map;
     }
     @PostMapping("/smart")
@@ -103,6 +153,73 @@ public class ArticleController {
             doc.should(wd);
         }
         return  elasticsearchTemplate.searchMore(doc.minimumShouldMatch("45%"),10,Article.class);
+    }
+
+    @GetMapping("/titlecompletion")
+    public List<String> completion(@RequestParam String keyword) throws Exception {
+        return elasticsearchTemplate.completionSuggest("title.suggest", keyword, Article.class);
+    }
+
+    protected BoolQueryBuilder MapToQuery(Map<String,Object> map) {
+        BoolQueryBuilder queryBuilder = QueryBuilders.boolQuery();
+        BoolQueryBuilder bool_queryBuilder;
+
+        String match = (String) map.get("match");
+        if(match != null){
+            queryBuilder.must(QueryBuilders.multiMatchQuery(match,"title","text").type(MultiMatchQueryBuilder.Type.CROSS_FIELDS).minimumShouldMatch("45%"));
+        }
+
+        String fuzzy = (String) map.get("fuzzy");
+        if(fuzzy != null){
+            bool_queryBuilder = QueryBuilders.boolQuery();
+            bool_queryBuilder.should(QueryBuilders.matchQuery("title",fuzzy).fuzziness(Fuzziness.AUTO).minimumShouldMatch("45%"));
+            bool_queryBuilder.should(QueryBuilders.matchQuery("text",fuzzy).fuzziness(Fuzziness.AUTO).minimumShouldMatch("45%"));
+            queryBuilder.must(bool_queryBuilder);
+        }
+
+        List<List<Map>> word_vec = (List<List<Map>>) map.get("word_vec");
+        if(word_vec != null){
+            for(List<Map> word:word_vec){
+                bool_queryBuilder = QueryBuilders.boolQuery();
+                for(Map vec:word){
+                    String w = (String) vec.get("word");
+                    float f = Float.parseFloat(vec.get("factor").toString());
+                    bool_queryBuilder.should(QueryBuilders.multiMatchQuery(w,"title","text").type(MultiMatchQueryBuilder.Type.CROSS_FIELDS)).boost(f);
+                }
+                queryBuilder.should(bool_queryBuilder);
+            }
+        }
+
+        List<String> must = (List<String>) map.get("must");
+        if(must != null){
+            for(String word:must){
+                bool_queryBuilder = QueryBuilders.boolQuery();
+                bool_queryBuilder.should(QueryBuilders.termQuery("title",word));
+                bool_queryBuilder.should(QueryBuilders.termQuery("text",word));
+                queryBuilder.must(bool_queryBuilder);
+            }
+        }
+
+        List<String> not = (List<String>) map.get("not");
+        if(not != null){
+            for(String word:not){
+                queryBuilder.mustNot(QueryBuilders.termQuery("title",word));
+                queryBuilder.mustNot(QueryBuilders.termQuery("text",word));
+            }
+        }
+
+        List<List<String>> or = (List<List<String>>) map.get("or");
+        if(or != null){
+            for(List<String> words:or){
+                bool_queryBuilder = QueryBuilders.boolQuery();
+                for(String word:words){
+                    bool_queryBuilder.should(QueryBuilders.multiMatchQuery(word,"title","text"));
+                }
+                queryBuilder.must(bool_queryBuilder);
+            }
+        }
+
+        return queryBuilder;
     }
 
     //构建高级搜索所用query

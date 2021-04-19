@@ -46,15 +46,21 @@ public class RedisUtil {
         Jedis jedis = pool.getResource();
         String publicKey = jedis.get("publicKey");
         if(publicKey == null){
-            Map<String,String> result = RSAUtil.generateRsaKey(2048);
-            jedis.set("publicKey",result.get("publicKey"));
-            jedis.expire("publicKey",60*5);
-            jedis.set(result.get("publicKey"),result.get("privateKey"));
-            jedis.expire(result.get("publicKey"),60*5);
-            publicKey = result.get("publicKey");
+            publicKey = GenerateKey();
         }
         jedis.close();
         return publicKey;
+    }
+
+    public static String GenerateKey() throws Exception{
+        Jedis jedis = pool.getResource();
+        Map<String,String> result = RSAUtil.generateRsaKey(2048);
+        jedis.set("publicKey",result.get("publicKey"));//对已有key进行set操作会重新赋值
+        jedis.expire("publicKey",60*5);
+        jedis.set(result.get("publicKey"),result.get("privateKey"));
+        jedis.expire(result.get("publicKey"),60*5);
+        jedis.close();
+        return result.get("publicKey");
     }
 
     public static String GetPrivateKey(String publicKey) throws Exception{

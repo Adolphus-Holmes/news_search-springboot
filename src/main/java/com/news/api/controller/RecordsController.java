@@ -31,7 +31,7 @@ public class RecordsController {
         if(!logeed.isEmpty()){
             record.setUsername(RedisUtil.GetToken(logeed));
         }
-        record.setDate(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").format(new Date()));
+        record.setDate(new Date());
         return elasticsearchTemplate.save(record);
     }
 

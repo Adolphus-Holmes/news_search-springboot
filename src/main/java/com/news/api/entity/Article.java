@@ -1,25 +1,32 @@
 package com.news.api.entity;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import org.zxp.esclientrhl.annotation.ESID;
 import org.zxp.esclientrhl.annotation.ESMapping;
 import org.zxp.esclientrhl.annotation.ESMetaData;
 import org.zxp.esclientrhl.enums.DataType;
 
+import java.io.Serializable;
+import java.util.Date;
+
 @Data
 @ESMetaData(indexName = "news_data",number_of_shards = 2,number_of_replicas = 0,printLog = true)
-public class Article {
+public class Article implements Serializable {
+    private static final long serialVersionUID = 7653349994587477388L;
     @ESID
     private String id;
 
     @ESMapping(datatype = DataType.text_type)
     private String title;
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ssss",timezone = "GMT+8")
     @ESMapping(datatype = DataType.date_type)
-    private Object crawl_date;
+    private Date crawl_date;
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss",timezone = "GMT+8")
     @ESMapping(datatype = DataType.date_type)
-    private Object release_date;
+    private Date release_date;
 
     @ESMapping(datatype = DataType.text_type)
     private String subtitle;
@@ -42,17 +49,6 @@ public class Article {
     @ESMapping(keyword = true)
     private String url;
 
-    @ESMapping(datatype = DataType.double_type)
-    private double rank_num;
-
-    public double getRank_num() {
-        return rank_num;
-    }
-
-    public void setRank_num(double rank_num) {
-        this.rank_num = rank_num;
-    }
-
     public String getId() {
         return id;
     }
@@ -73,7 +69,7 @@ public class Article {
         return crawl_date;
     }
 
-    public void setCrawl_date(Object crawl_date) {
+    public void setCrawl_date(Date crawl_date) {
         this.crawl_date = crawl_date;
     }
 
@@ -81,7 +77,7 @@ public class Article {
         return release_date;
     }
 
-    public void setRelease_date(Object release_date) {
+    public void setRelease_date(Date release_date) {
         this.release_date = release_date;
     }
 
@@ -155,7 +151,6 @@ public class Article {
                 ", text='" + text + '\'' +
                 ", domain='" + domain + '\'' +
                 ", url='" + url + '\'' +
-                ", rank_num=" + rank_num +
                 '}';
     }
 }

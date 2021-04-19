@@ -94,11 +94,9 @@ public class SpringbootApplicationTests {
     @Test
     public void testrecord(){
         Records re = new Records();
-        re.setKeyword("人民");
+        re.setKeyword("人民123456");
         re.setUsername("admin");
-        Long l = (long) (1000 * 1616169600);
-        System.out.println(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").format(new Date(1000 * 1616169600)));
-        re.setDate(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss").format(new Date(1000 * 1616169600)));
+        re.setDate(new Date());
         try {
             recordTemplate.save(re);
         } catch (Exception e) {
@@ -279,5 +277,13 @@ public class SpringbootApplicationTests {
         String str = gson.toJson(queryBuilder);
         BoolQueryBuilder jsonquery = gson.fromJson(str, BoolQueryBuilder.class);
         System.out.println(jsonquery);
+    }
+
+    @Test
+    public void testjson(){
+        Map map = new HashMap();
+        map.put("must","手机");
+        List<List<String>> w = (List<List<String>>) map.get("or");
+        System.out.println(w);
     }
 }

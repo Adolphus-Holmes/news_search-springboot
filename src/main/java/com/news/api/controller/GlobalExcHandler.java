@@ -1,5 +1,6 @@
 package com.news.api.controller;
 
+import com.news.api.util.RedisUtil;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseBody;
@@ -14,7 +15,7 @@ public class GlobalExcHandler {
      */
     @ResponseBody
     @ExceptionHandler(value = IllegalArgumentException.class)
-    public String handleArgError(IllegalArgumentException e,HttpServletResponse response){
+    public String handleArgError(IllegalArgumentException e,HttpServletResponse response) throws Exception {
         switch (e.getMessage()){
             case "Token已过期":
                 response.setStatus(401);//要求身份认证
@@ -26,6 +27,7 @@ public class GlobalExcHandler {
                 response.setStatus(403);//拒绝执行
                 break;
             case "公钥已过期":
+                RedisUtil.GenerateKey();
                 response.setStatus(449);//重试
                 break;
         }

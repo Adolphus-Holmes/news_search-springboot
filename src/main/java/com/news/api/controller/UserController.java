@@ -78,7 +78,6 @@ public class UserController {
                 return true;
             }
         }
-        response.setStatus(401);
         return false;
     }
 
@@ -97,7 +96,6 @@ public class UserController {
             user.setPassword("");
         }else{
             RedisUtil.DelToken(logeed);
-            response.setStatus(401);
         }
         return user;
     }
@@ -153,7 +151,6 @@ public class UserController {
             user.setPassword(MD5Util.getMD5(newpassword));
             return elasticsearchTemplate.update(user);
         }
-        response.setStatus(401);
         return false;
     }
 
